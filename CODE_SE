@@ -1,0 +1,85 @@
+#!/usr/bin/env pybricks-micropython
+from pybricks.hubs import EV3Brick
+from pybricks.ev3devices import Motor, TouchSensor, ColorSensor
+from pybricks.parameters import Port, Stop, Color
+from pybricks.tools import wait
+
+# Inicializar EV3
+ev3 = EV3Brick()
+
+# Motores
+motor1 = Motor(Port.B)  # Motor principal
+motor2 = Motor(Port.C)  # Motor para plegar/desplegar plataforma
+
+# Sensores
+sensor_tactil_superior = TouchSensor(Port.S4)  # Límite superior
+sensor_tactil_inferior = TouchSensor(Port.S3)  # Límite inferior
+sensor_color = ColorSensor(Port.S2)  # Sensor de color
+
+# Estado del motor1: 0 = detenido, 1 = subiendo, -1 = bajando
+estado_motor1 = 0
+
+# Estado de la plataforma
+plataforma_plegada = True  # Inicia plegada
+
+# Velocidades
+velocidad_subida = 100   # Positiva = horario = subir
+velocidad_bajada = -100  # Negativa = antihorario = bajar
+vel_motor2_plegar = 300  # Aumentado para mayor potencia
+vel_motor2_desplegar = -300  # Aumentado para mayor potencia
+
+# Temporizador para pitidos
+tiempo_sonido = 0
+
+while True:
+    # Lectura de sensores
+    color = sensor_color.color()
+
+    # Mostrar información en la pantalla del EV3
+    ev3.screen.clear()
+    ev3.screen.print("Color:", color)
+    ev3.screen.print("Estado:", estado_motor1)
+    ev3.screen.print("Plataforma:", "Plegada" if plataforma_plegada else "Desplegada")
+
+    # Si motor1 está en movimiento y llega al límite táctil → detener
+    if estado_motor1 == 1 and sensor_tactil_superior.pressed():
+        motor1.stop(Stop.BRAKE)
+        estado_motor1 = 0
+    elif estado_motor1 == -1 and sensor_tactil_inferior.pressed():
+        motor1.stop(Stop.BRAKE)
+        estado_motor1 = 0
+
+    # Si detecta rojo → detener motor1
+    elif color == Color.RED:
+        motor1.stop(Stop.BRAKE)
+        estado_motor1 = 0
+
+    # Si detecta AZUL → subir
+    elif color == Color.BLUE and estado_motor1 == 0:
+        motor1.run(velocidad_subida)
+        estado_motor1 = 1
+
+    # Si detecta AMARILLO → bajar
+    elif color == Color.YELLOW and estado_motor1 == 0:
+        motor1.run(velocidad_bajada)
+        estado_motor1 = -1
+
+    # Si detecta BLANCO → alternar estado de la plataforma (solo si el motor1 está detenido)
+    if color == Color.WHITE and estado_motor1 == 0:
+        if plataforma_plegada:
+            motor2.run_time(vel_motor2_desplegar, 1000, Stop.BRAKE)  # Desplegar
+            plataforma_plegada = False
+        else:
+            motor2.run_time(vel_motor2_plegar, 1000, Stop.BRAKE)  # Plegar
+            plataforma_plegada = True
+
+    # Pitido mientras motor1 está moviéndose
+    if estado_motor1 != 0:
+        tiempo_sonido += 100
+        if tiempo_sonido >= 500:
+            ev3.speaker.beep()
+            tiempo_sonido = 0
+    else:
+        tiempo_sonido = 0
+
+    wait(100)
