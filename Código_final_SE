@@ -1,0 +1,97 @@
+#!/usr/bin/env pybricks-micropython
+from pybricks.hubs import EV3Brick
+from pybricks.ev3devices import Motor, TouchSensor, ColorSensor
+from pybricks.parameters import Port, Stop, Color
+from pybricks.tools import wait
+
+# Inicializar EV3
+ev3 = EV3Brick()
+
+# Motores
+motor1 = Motor(Port.B)
+motor2 = Motor(Port.C)
+
+# Sensores
+sensor_tactil_superior = TouchSensor(Port.S4)
+sensor_tactil_inferior = TouchSensor(Port.S3)
+sensor_color = ColorSensor(Port.S2)
+sensor_color2 = ColorSensor(Port.S1)  # Segundo sensor de color
+
+# Estado del motor1: 0 = detenido, 1 = subiendo, -1 = bajando
+estado_motor1 = 0
+estado_motor1_anterior = 0
+plataforma_plegada = True
+
+# Velocidades
+velocidad_subida = 100
+velocidad_bajada = -100
+vel_motor2_plegar = 300
+vel_motor2_desplegar = -300
+
+# Temporizador de sonido
+tiempo_sonido = 0
+
+while True:
+    # Lectura de sensores
+    color = sensor_color.color()
+    color2 = sensor_color2.color()  # Asegurar que la lectura del sensor 2 está funcionando correctamente
+
+    # Mostrar información en pantalla
+    ev3.screen.clear()
+    ev3.screen.print("Color1:", color)
+    ev3.screen.print("Color2:", color2)
+    ev3.screen.print("Estado:", estado_motor1)
+    ev3.screen.print("Plataforma:", "Plegada" if plataforma_plegada else "Desplegada")
+
+    # Control de límites táctiles
+    if estado_motor1 == 1 and sensor_tactil_superior.pressed():
+        motor1.stop(Stop.BRAKE)
+        estado_motor1 = 0
+        ev3.speaker.beep(frequency=600, duration=500)  # Sonido de finalización
+    elif estado_motor1 == -1 and sensor_tactil_inferior.pressed():
+        motor1.stop(Stop.BRAKE)
+        estado_motor1 = 0
+        ev3.speaker.beep(frequency=600, duration=500)  # Sonido de finalización
+
+    # Sensor de color 1 (acciones principales)
+    elif color == Color.RED:
+        motor1.stop(Stop.BRAKE)
+        estado_motor1 = 0
+        ev3.speaker.beep(frequency=200, duration=1000)  # Sonido de emergencia
+    elif color == Color.BLUE and estado_motor1 == 0:
+        motor1.run(velocidad_subida)
+        estado_motor1 = 1
+    elif color == Color.YELLOW and estado_motor1 == 0:
+        motor1.run(velocidad_bajada)
+        estado_motor1 = -1
+    elif color == Color.WHITE and estado_motor1 == 0:
+        if plataforma_plegada:
+            motor2.run_time(vel_motor2_desplegar, 1000, Stop.BRAKE)
+            plataforma_plegada = False
+            ev3.speaker.beep(frequency=800, duration=400)  # Sonido al desplegar
+        else:
+            motor2.run_time(vel_motor2_plegar, 1000, Stop.BRAKE)
+            plataforma_plegada = True
+            ev3.speaker.beep(frequency=400, duration=400)  # Sonido al plegar
+
+    # Sensor de color 2 (acciones adicionales)
+    if color2 == Color.GREEN and estado_motor1 == 0 and not sensor_tactil_superior.pressed():
+        motor1.run(velocidad_subida)
+        estado_motor1 = 1
+    elif color2 == Color.WHITE and estado_motor1 == 0 and not sensor_tactil_inferior.pressed():
+        motor1.run(velocidad_bajada)
+        estado_motor1 = -1
+
+    # Sonido mientras el motor está en movimiento
+    if estado_motor1 != 0:
+        tiempo_sonido += 100
+        if tiempo_sonido >= 500:
+            ev3.speaker.beep(frequency=440, duration=200)  # Sonido mientras sube/baja
+            tiempo_sonido = 0
+    else:
+        tiempo_sonido = 0
+
+    # Guardar estado anterior
+    estado_motor1_anterior = estado_motor1
+
+    wait(100)
